@@ -1,0 +1,8 @@
+node_modules
+
+credentials
+.env
+
+replays/**/*.json
+replays/**/*.replay
+replays/**/*.zip

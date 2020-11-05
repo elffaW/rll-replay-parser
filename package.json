@@ -1,0 +1,19 @@
+{
+  "name": "rll-replay-parser",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "parse-replay": "node ./tools/parseReplayAndUpdateSheet.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "google-spreadsheet": "^3.0.13"
+  },
+  "dependencies": {
+    "chalk": "^4.1.0",
+    "dotenv": "^8.2.0"
+  }
+}
