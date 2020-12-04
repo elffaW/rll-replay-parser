@@ -94,7 +94,7 @@ function getDataFromReplay(replayFile) {
     const actualPlayers = players.filter((p) => !!p.score);
 
     const playersWithTeams = actualPlayers.map((player) => {
-      const team = PLAYER_TEAM_MAP[player.name];
+      const team = PLAYER_TEAM_MAP[player.name.toLowerCase()];
       player.teamName = team;
       player.origTeam = team; // useful in case this player is subbing
       player.id = player.id.id; // fix stupid JSON
@@ -288,7 +288,7 @@ function updateSheet(data) {
             // each stat row
             const statRow = {
               GN: CUR_GAMENUM,
-              PLAYER: (PLAYER_RLNAME_MAP[name] || name).toUpperCase(),
+              PLAYER: (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase(),
               TM: (teamName || '').toUpperCase(),
               OPP: (oppTeam || '').toUpperCase(),
               GP: 1,
