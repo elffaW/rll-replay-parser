@@ -11,7 +11,7 @@ if [[ -d "$REPLAY_LOC" && $(ls -A "$REPLAY_LOC") ]]; then
     i=0
     for fullfile in "$REPLAY_LOC/"*.replay; do
         nopath=${fullfile##*/}
-        file=${nopath%%.*}
+        file=${nopath%.*}
         # echo "$file"
         # ./rrrocket "$fullfile" > "$JSON_LOC/$file.json"
         carball -i "$fullfile" --json "$JSON_LOC/$file.json"
