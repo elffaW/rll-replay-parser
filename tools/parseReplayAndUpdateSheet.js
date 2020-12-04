@@ -43,15 +43,17 @@ console.log(chalk.magenta('Parsing replays for Season'), chalk.magentaBright(`${
     const files = await fs.promises.readdir(JSON_LOC);
 
     for (const file of files) {
-      try {
-        const data = await getDataFromReplay(file);
-        console.log(chalk.cyanBright(`got data, now save it [${file}]`));
-        // console.log(JSON.stringify(data, null, 2));
-        // console.log(data.playerStats.map((p) => `${p.name}:${p.teamName} [${p.maxTeam}]`));
-        const numRows = await updateSheet(data);
-        console.log(`Inserted ${numRows} data rows`);
-      } catch (err) {
-        console.log(chalk.yellow(`JSON [${file}]:`, err));
+      if (file.toLowerCase().endsWith('.json')) { // only JSON files
+        try {
+          const data = await getDataFromReplay(file);
+          console.log(chalk.cyanBright(`got data, now save it [${file}]`));
+          // console.log(JSON.stringify(data, null, 2));
+          // console.log(data.playerStats.map((p) => `${p.name}:${p.teamName} [${p.maxTeam}]`));
+          const numRows = await updateSheet(data);
+          console.log(`Inserted ${numRows} data rows`);
+        } catch (err) {
+          console.log(chalk.yellow(`JSON [${file}]:`, err));
+        }
       }
     }
   } catch (e) {
@@ -89,7 +91,9 @@ function getDataFromReplay(replayFile) {
       reject('not DEFAULT ballType, not RLL');
     }
 
-    const playersWithTeams = players.map((player) => {
+    const actualPlayers = players.filter((p) => !!p.score);
+
+    const playersWithTeams = actualPlayers.map((player) => {
       const team = PLAYER_TEAM_MAP[player.name];
       player.teamName = team;
       player.origTeam = team; // useful in case this player is subbing
@@ -101,14 +105,16 @@ function getDataFromReplay(replayFile) {
     const team0 = playersWithTeams.filter((player) => player.isOrange === 0);
     const team1 = playersWithTeams.filter((player) => player.isOrange === 1);
 
-    const team0MaxTeam = team0.sort((a, b) => (
+    const team0Max = team0.sort((a, b) => (
       team0.filter((p) => p.teamName === a.teamName).length -
       team0.filter((p) => p.teamName === b.teamName).length
-    )).pop().teamName;
-    const team1MaxTeam = team1.sort((a, b) => (
+    ));
+    const team0MaxTeam = team0Max[0].teamName === 'BOTSBOTS' ? team0Max[1].teamName : team0Max.pop().teamName;
+    const team1Max = team1.sort((a, b) => (
       team1.filter((p) => p.teamName === a.teamName).length -
       team1.filter((p) => p.teamName === b.teamName).length
-    )).pop().teamName;
+    ));
+    const team1MaxTeam = team1Max[0].teamName === 'BOTSBOTS' ? team1Max[1].teamName : team1Max.pop().teamName;
 
     const finalPlayerStats = playersWithTeams.map((p) => {
       p.teamName = (!!p.isOrange ? team1MaxTeam : team0MaxTeam);
@@ -124,11 +130,13 @@ function getDataFromReplay(replayFile) {
     retData.teamStats = teams;
     // gameStats don't look particularly interesting, but they're there if we want
     // retData.gameStats = gameStats;
+    const unevenTeams = teams[0].playerIds.length !== teams[1].playerIds.length;
 
-    if (!team0MaxTeam || !team1MaxTeam || finalPlayerStats.length !== teamSize * 2) {
-      const plyrs = finalPlayerStats.map((p) => p.name);
-      // const plyrs = finalPlayerStats.map((p) => `${p.name}:${p.teamName} [${p.maxTeam}]`);
-      reject(`ignore this game -- not RLL: ${plyrs} [${plyrs.length}]`);
+    if (!team0MaxTeam || !team1MaxTeam) {// || unevenTeams) {
+      console.log('unevenTeams?', unevenTeams);
+      // const plyrs = finalPlayerStats.map((p) => p.name);
+      const plyrs = finalPlayerStats.map((p) => `[${p.teamName}]\t${p.origTeam}\t${p.name}\n`);
+      reject(`ignore this game -- not RLL: \n${plyrs} [${plyrs.length} players]\tuneven? ${unevenTeams}`);
     } else {
       resolve(retData);
     }
@@ -197,12 +205,13 @@ function updateSheet(data) {
               teamName,
               origTeam,
               oppTeam,
-              goals,
-              assists,
-              saves,
-              shots,
-              score,
+              goals = 0,
+              assists = 0,
+              saves = 0,
+              shots = 0,
+              score = 0,
               stats,
+              timeInGame = 0,
             } = player;
 
             const {
@@ -253,23 +262,29 @@ function updateSheet(data) {
               numStolenBoosts = 0,
             } = boost;
             const { ballHitForward = 0, ballHitBackward = 0, timeCloseToBall = 0 } = distance;
-            const { turnovers = 0, wonTurnovers = 0 } = possession;
+            const { turnovers = 0, wonTurnovers = 0 } = possession || {};
             const {
               timeLowInAir = 0,
               timeHighInAir = 0,
               timeBehindBall = 0,
               timeInFrontBall = 0,
               timeOnWall = 0,
+              timeInDefendingThird = 0,
+              timeInNeutralThird = 0,
+              timeInAttackingThird = 0,
             } = positionalTendencies;
             const { averageSpeed = 0, averageHitDistance = 0 } = averages;
-            const { totalHits = 0, totalAerials = 0, totalClears = 0 } = hitCounts;
-            const { timeBallcam = 0 } = controller;
+            const { totalHits = 0, totalPasses = 0, totalDribbles = 0, totalAerials = 0, totalClears = 0 } = hitCounts || {};
+            const { timeBallcam = 0 } = controller || {};
             const { timeAtSlowSpeed = 0, timeAtBoostSpeed = 0, timeAtSuperSonic = 0 } = speed;
             const { timeMostForwardPlayer = 0, timeMostBackPlayer = 0, timeBetweenPlayers = 0 } = relativePositioning;
             const { totalCarries = 0, totalCarryDistance = 0 } = ballCarries || {};
             const { numTimeFirstTouch = 0, numTimeAfk = 0 } = kickoffStats;
             const { numDemosInflicted = 0, numDemosTaken = 0 } = demoStats || {};
             
+            // CALCULATED STATS
+            const usefulHits = totalPasses + totalClears + shots + goals + saves;
+
             // each stat row
             const statRow = {
               GN: CUR_GAMENUM,
@@ -306,6 +321,7 @@ function updateSheet(data) {
               "FIRST TOUCHES": numTimeFirstTouch,
               "KICKOFF AFK": numTimeAfk,
               "CLEARS": totalClears,
+              "PASSES": totalPasses,
               "TURNOVERS": turnovers,
               "TURNOVERS WON": wonTurnovers,
               "BOOST USAGE": boostUsage,
@@ -331,10 +347,16 @@ function updateSheet(data) {
               "TIME CLOSE TO BALL": timeCloseToBall,
               "BALL CARRIES": totalCarries,
               "CARRY DISTANCE": totalCarryDistance,
+              "DRIBBLE HITS": totalDribbles,
               "TIME CLUMPED": timeClumped,
+              "USEFUL HITS": usefulHits,
+              "TIME IN GAME": timeInGame,
+              "TIME DEF THIRD": timeInDefendingThird,
+              "TIME NEUTRAL THIRD": timeInNeutralThird,
+              "TIME ATTACK THIRD": timeInAttackingThird,
             };
 
-            console.log(statRow);
+            // console.log(statRow);
             gameRows.push(statRow);
           }
           try {
