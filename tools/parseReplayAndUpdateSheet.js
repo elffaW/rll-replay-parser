@@ -38,12 +38,19 @@ if (!process.env.GOOGLE_SHEETS_SHEET_ID) {
 
 console.log(chalk.magenta('Parsing replays for Season'), chalk.magentaBright(`${SEASON_NUMBER}`));
 
+// helper function to try to avoid Google API rate-limiting
+const delay = (time) => new Promise((res) => setTimeout(res, time));
+
 (async () => {
   try {
     const files = await fs.promises.readdir(JSON_LOC);
 
+    let numJsonFiles = 0;
+
     for (const file of files) {
       if (file.toLowerCase().endsWith('.json')) { // only JSON files
+        numJsonFiles++;
+        console.log(chalk.cyan('get data from file ['), file, chalk.cyan(']'));
         try {
           const data = await getDataFromReplay(file);
           console.log(chalk.cyanBright(`got data, now save it [${file}]`));
@@ -51,11 +58,15 @@ console.log(chalk.magenta('Parsing replays for Season'), chalk.magentaBright(`${
           // console.log(data.playerStats.map((p) => `${p.name}:${p.teamName} [${p.maxTeam}]`));
           const numRows = await updateSheet(data);
           console.log(`Inserted ${numRows} data rows`);
+
+          // add a delay
+          await delay(3000);
         } catch (err) {
           console.log(chalk.yellow(`JSON [${file}]:`, err));
         }
       }
     }
+    console.log('Parsed', chalk.yellowBright(numJsonFiles), 'files');
   } catch (e) {
     console.error('Error getting JSON replays!', e);
   }
@@ -102,6 +113,8 @@ function getDataFromReplay(replayFile) {
       return player;
     });
 
+    // determine which teams are playing from the players
+    // NOTE: won't really work unless the 
     const team0 = playersWithTeams.filter((player) => player.isOrange === 0);
     const team1 = playersWithTeams.filter((player) => player.isOrange === 1);
 
@@ -171,16 +184,21 @@ function updateSheet(data) {
            * 
            * *ROLES removed S4
            */
+          // console.log(doc.sheetsByTitle["Stats"]);
           // const playersSheet = doc.sheetsByIndex[4];
           // const rolesSheet = doc.sheetsByIndex[8];
           // const rostersSheet = doc.sheetsByIndex[5];
           // const standingsSheet = doc.sheetsByIndex[0];
-          // const scheduleSheet = doc.sheetsByIndex[1];
-          const statsSheet = doc.sheetsByIndex[6];
+          const scheduleSheet = doc.sheetsByTitle["ScheduleRows"]; // doc.sheetsByIndex[1];
+          const statsSheet = doc.sheetsByTitle["Stats"]; // doc.sheetsByIndex[6];
+
+          let scheduleRows = await scheduleSheet.getRows();
+          // filter to completed games
+          scheduleRows = scheduleRows.filter((row) => parseInt(row.GAME_COMPLETE, 10) === 1);
 
           const statsRows = await statsSheet.getRows();
-          const statsLastGN = statsRows[statsRows.length - 1] ? statsRows[statsRows.length - 1].GN : -1;
-          CUR_GAMENUM = statsLastGN > CUR_GAMENUM ? parseInt(statsLastGN, 10) + 1 : CUR_GAMENUM;
+          // const statsLastGN = statsRows[statsRows.length - 1] ? statsRows[statsRows.length - 1].GN : -1;
+          // CUR_GAMENUM = statsLastGN > CUR_GAMENUM ? parseInt(statsLastGN, 10) + 1 : CUR_GAMENUM;
           // add one row per player to the statsSheet
           const { team0Score, team1Score, teamSize, playerStats, teamStats } = data;
 
@@ -192,6 +210,10 @@ function updateSheet(data) {
 
           const team0TotScore = team0.map((p) => p.score).reduce((accum, cur) => accum + cur);
           const team1TotScore = team1.map((p) => p.score).reduce((accum, cur) => accum + cur);
+
+          // get all (unique) GNs that have already been inserted, so we can try to avoid reusing when teams/scorelines match multiple times
+          const allGNs = statsRows.map((row) => row.GN).filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => parseInt(y, 10) - parseInt(x, 10));
+          console.log(allGNs);
 
           const gameRows = [];
 
@@ -213,6 +235,36 @@ function updateSheet(data) {
               stats,
               timeInGame = 0,
             } = player;
+
+            const teamScore = !!isOrange ? team1Score : team0Score;
+            const oppScore = !!!isOrange ? team1Score : team0Score;
+
+            // finish getting game ID
+            // find game between these teams
+            const currentGame = scheduleRows.find((row) => {
+              // eliminate GNs that are already in the sheet
+              if (allGNs.indexOf(row.GAME) > -1) {
+                return false;
+              }
+
+              const isTeamA = row.TM_A.toUpperCase() === (teamName || '').toUpperCase();
+              const isTeamB = row.TM_B.toUpperCase() === (teamName || '').toUpperCase();
+              const oppTeamB = row.TM_B.toUpperCase() === (oppTeam || '').toUpperCase();
+              const oppTeamA = row.TM_A.toUpperCase() === (oppTeam || '').toUpperCase();
+              
+              if (isTeamA && oppTeamB) {
+                return (parseInt(row.TM_A_SCR, 10) === parseInt(teamScore, 10) && parseInt(row.TM_B_SCR, 10) === parseInt(oppScore, 10));
+              } else if (isTeamB && oppTeamA) {
+                return (parseInt(row.TM_B_SCR, 10) === parseInt(teamScore, 10) && parseInt(row.TM_A_SCR, 10) === parseInt(oppScore, 10));
+              }
+              return false;
+            });
+            if (currentGame) {
+              CUR_GAMENUM = parseInt(currentGame.GAME, 10);
+            } else {
+              console.log('GN not found, using -1');
+              console.log(CUR_GAMENUM, '\t', teamScore, teamName, 'vs', oppTeam, oppScore, '\t', (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase());
+            }
 
             const {
               boost,
@@ -292,8 +344,8 @@ function updateSheet(data) {
               TM: (teamName || '').toUpperCase(),
               OPP: (oppTeam || '').toUpperCase(),
               GP: 1,
-              "TM SC": !!isOrange ? team1Score : team0Score,
-              "OPP SC": !!!isOrange ? team1Score : team0Score,
+              "TM SC": teamScore,
+              "OPP SC": oppScore,
               SCORE: score,
               G: goals,
               A: assists,
@@ -357,13 +409,16 @@ function updateSheet(data) {
             };
 
             // console.log(statRow);
+            // console.log(CUR_GAMENUM, '\t', teamScore, teamName, 'vs', oppTeam, oppScore, '\t', (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase());
             gameRows.push(statRow);
           }
           try {
-            const addRows = await statsSheet.addRows(gameRows);
-            CUR_GAMENUM += 1;
-            resolve(addRows.length);
-            // resolve(gameRows.length); // TODO: remove after including sheets update
+            // const addRows = await statsSheet.addRows(gameRows);
+            console.log(`\tGN: ${CUR_GAMENUM}`);
+            // CUR_GAMENUM += 1;
+            CUR_GAMENUM = -1;
+            // resolve(addRows.length);
+            resolve(gameRows.length); // TODO: remove after including sheets update
           } catch (err) {
             console.error(chalk.redBright('ERROR adding rows'));
             reject(err);
