@@ -47,9 +47,9 @@ const delay = (time) => new Promise((res) => setTimeout(res, time));
 
     let numJsonFiles = 0;
 
-    // const allGameStats = [];
-    // const gamesNoGoals = [];
-    // let allGoals = [];
+    const allGameStats = [];
+    const gamesNoGoals = [];
+    let allGoals = [];
 
     for (const file of files) {
       if (file.toLowerCase().endsWith('.json')) { // only JSON files
@@ -60,23 +60,23 @@ const delay = (time) => new Promise((res) => setTimeout(res, time));
           console.log(chalk.cyanBright(`got data, now save it [${file}]`));
           // console.log(JSON.stringify(data, null, 2));
           // console.log(data.playerStats.map((p) => `${p.name}:${p.teamName} [${p.maxTeam}]`));
-          const numRows = await updateSheet(data);
-          console.log(`Inserted ${numRows} data rows`);
-          // allGameStats.push(data.gameStats);
-          // const { goals, ...gameWithoutGoalsArray } = data.gameStats;
-          // gamesNoGoals.push(gameWithoutGoalsArray);
-          // allGoals = allGoals.concat(data.gameStats.goals);
+          // const numRows = await updateSheet(data);
+          // console.log(`Inserted ${numRows} data rows`);
+          allGameStats.push(data.gameStats);
+          const { goals, ...gameWithoutGoalsArray } = data.gameStats;
+          gamesNoGoals.push(gameWithoutGoalsArray);
+          allGoals = allGoals.concat(data.gameStats.goals);
 
           // add a delay
-          await delay(3000);
+          // await delay(3000);
         } catch (err) {
           console.log(chalk.yellow(`JSON [${file}]:`, err));
         }
       }
     }
-    // fs.writeFileSync(`${JSON_LOC}/gameStats.json`, JSON.stringify(allGameStats), err => {});
-    // fs.writeFileSync(`${JSON_LOC}/goalStats.json`, JSON.stringify(allGoals), err => {});
-    // fs.writeFileSync(`${JSON_LOC}/gameStats_noGoals.json`, JSON.stringify(gamesNoGoals), err => {});
+    fs.writeFileSync(`${JSON_LOC}/gameStats.json`, JSON.stringify(allGameStats), err => {});
+    fs.writeFileSync(`${JSON_LOC}/goalStats.json`, JSON.stringify(allGoals), err => {});
+    fs.writeFileSync(`${JSON_LOC}/gameStats_noGoals.json`, JSON.stringify(gamesNoGoals), err => {});
     console.log('Parsed', chalk.yellowBright(numJsonFiles), 'files');
   } catch (e) {
     console.error('Error getting JSON replays!', e);
