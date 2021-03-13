@@ -1,6 +1,6 @@
 
 const PLAYER_TEAM_MAP = {
-    /*** SEASON 5 ***/
+    /*** SEASON 6 ***/
     "kawa": "TOAST",
     "AwesomeX": "BRAN",
     "awesomex": "BRAN",
@@ -38,6 +38,48 @@ const PLAYER_TEAM_MAP = {
     "creamdaddy9057": "TOAST",
     "nkssoccer15": "CRUNCH",
     "fatkiddestroyers": "FLAKES",
+    "tfeej": "NEW",
+    "TFeej": "NEW",
+    "ades 35": "NEW",
+
+    /*** SEASON 5 ***/
+    // "kawa": "TOAST",
+    // "AwesomeX": "BRAN",
+    // "awesomex": "BRAN",
+    // "JR": "SMACKS",
+    // "jr": "SMACKS",
+    // "dethorne": "CRUNCH",
+    // "elffaW": "SMACKS",
+    // "elffaw": "SMACKS",
+    // "andy mac": "TRIX",
+    // "Andy Mac": "TRIX",
+    // "Twerp": "FROOTS",
+    // "twerp": "FROOTS",
+    // "mattaux": "CHARMS",
+    // "kawa2796": "BRAN",
+    // "Kawa2796": "BRAN",
+    // "pnkrockjock26": "KRISPIES",
+    // "Hootenannies": "KRISPIES",
+    // "hootenannies": "KRISPIES",
+    // "ofthemoon16": "CHEERIOS",
+    // "GolfJBC89": "FROOTS",
+    // "golfjbc89": "FROOTS",
+    // "JMyrv": "CHEERIOS",
+    // "jmyrv": "CHEERIOS",
+    // "Kurtzy P00": "TOAST",
+    // "kurtzy P00": "TOAST",
+    // "KURTZYP00": "TOAST",
+    // "KURTZY P00": "TOAST",
+    // "snakes on a microplane": "FLAKES",
+    // "Evergreen6258": "TRIX",
+    // "evergreen6258": "TRIX",
+    // "madscoutfan": "CHARMS",
+    // "madscout": "CHARMS",
+    // "CREAM DADDY9057": "TOAST",
+    // "cream daddy9057": "TOAST",
+    // "creamdaddy9057": "TOAST",
+    // "nkssoccer15": "CRUNCH",
+    // "fatkiddestroyers": "FLAKES",
 
     /*** SEASON 4 ***/
     // "kawa": "Pilgrims",
@@ -180,6 +222,9 @@ const PLAYER_RLNAME_MAP = {
     "creamdaddy9057": "Tom",
     "nkssoccer15": "Nimish",
     "fatkiddestroyers": "Vinny",
+    "tfeej": "Tom 3.0",
+    "TFeej": "NEW",
+    "ades 35": "Dave"
 };
 
 module.exports = { PLAYER_RLNAME_MAP, PLAYER_TEAM_MAP };
