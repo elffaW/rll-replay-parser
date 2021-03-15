@@ -16,6 +16,7 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { SEASON_NUMBER, JSON_LOC } = process.env;
 
 let CUR_GAMENUM = 1;
+
 /**
  * indicate whether the games are combine games
  * - important because combine does not have teams yet, and no schedule for GN
@@ -23,7 +24,7 @@ let CUR_GAMENUM = 1;
  *    - assign teams as ORANGE or BLUE
  *    - GN should just be incrementing int
  */
-let IS_COMBINE = true;
+let IS_COMBINE = false;
 
 // required env vars
 if (!SEASON_NUMBER) {
