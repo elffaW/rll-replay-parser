@@ -16,6 +16,7 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { SEASON_NUMBER, JSON_LOC } = process.env;
 
 let CUR_GAMENUM = 1;
+let CUR_GAMEWEEK = -1;
 
 /**
  * indicate whether the games are combine games
@@ -67,14 +68,18 @@ const delay = (time) => new Promise((res) => setTimeout(res, time));
         try {
           const data = await getDataFromReplay(file);
           console.log(chalk.cyanBright(`got data, now save it [${file}]`));
-          // console.log(JSON.stringify(data, null, 2));
-          // console.log(data.playerStats.map((p) => `${p.name}:${p.teamName} [${p.maxTeam}]`));
-          const numRows = await updateSheet(data, file.slice(0, -5));
-          console.log(`Inserted ${numRows} data rows`);
+
+          const { statRows, gameRows, goalRows } = await updateSheet(data, file.slice(0, -5));
+          console.log('Inserted', chalk.green(statRows), 'stat rows\t', chalk.green(gameRows), 'game rows\t', chalk.green(goalRows), 'goal rows');
+          console.log();
+
+          /** for writing stats to files */
           // allGameStats.push(data.gameStats);
           // const { goals, ...gameWithoutGoalsArray } = data.gameStats;
           // gamesNoGoals.push(gameWithoutGoalsArray);
           // allGoals = allGoals.concat(data.gameStats.goals);
+
+          // console.log(data.playerStats.map((p) => `${JSON.stringify(p.stats.demoStats)}: ${p.name}`));
 
           // add a delay
           await delay(3000);
@@ -101,7 +106,7 @@ function getDataFromReplay(replayFile) {
     // playlist: CUSTOM_LOBBY (private match), UNKNOWN (public ranked?)
     // see https://github.com/SaltieRL/carball/blob/3e66f175378f050b84bc9a3b15de0420505092a7/api/metadata/game_metadata.proto#L8
     // if UNKNOWN, "unknownPlaylist": 34
-    const { id: gameId, score, teamSize, playlist, goals, time, frames, length, map, serverName } = replayJson.gameMetadata;
+    const { id: gameId, score, teamSize, playlist, goals, demos, time, frames, length, map, serverName } = replayJson.gameMetadata;
     const { team0Score, team1Score } = score;
     
     if (playlist !== 'CUSTOM_LOBBY') {
@@ -162,8 +167,56 @@ function getDataFromReplay(replayFile) {
 
       return p;
     });
+
+    /**
+     * stupid missile goal celebration ruins the demo stats
+     * - fix by removing demos where the attacker and victim are the same ID
+     */
+    const realDemos = [];
+    if (demos) {
+      demos.forEach((demo) => {
+        if (demo.attackerId.id !== demo.victimId.id) {
+          realDemos.push(demo);
+        }
+      });
+    }
+    console.log('DEMOS\t', demos ? demos.length : 0, ' vs ', realDemos.length);
+    const finalPlayerStatsWithDemos = realDemos && realDemos.length > 0
+      ? finalPlayerStats.map((p) => {
+        const numDemos = realDemos.filter((d) => d.attackerId.id === p.id);
+        const numTaken = realDemos.filter((d) => d.victimId.id === p.id);
+        const numDemosInflicted = numDemos ? numDemos.length : 0;
+        const numDemosTaken = numTaken ? numTaken.length : 0;
+        p.stats.demoStats = {
+          numDemosInflicted,
+          numDemosTaken
+        };
+
+        return p;
+      })
+      : finalPlayerStats;
     
-    retData.playerStats = finalPlayerStats.sort((a, b) => a.isOrange - b.isOrange);
+    // rename bots to BOT 1, 2, 3
+    let teamOrange = finalPlayerStatsWithDemos.filter((p) => !!p.isOrange).sort((a, b) => a.name - b.name);
+    let teamBlue = finalPlayerStatsWithDemos.filter((p) => !!!p.isOrange).sort((a, b) => a.name - b.name);
+    let botNum = 1;
+    teamOrange = teamOrange.map((p) => {
+      if (p.isBot && p.teamName === p.origTeam) {
+        p.name = `BOT #${botNum}`;
+        botNum++;
+      }
+      return p;
+    });
+    botNum = 1;
+    teamBlue = teamBlue.map((p) => {
+      if (p.isBot && p.teamName === p.origTeam) {
+        p.name = `BOT #${botNum}`;
+        botNum++;
+      }
+      return p;
+    });
+    const realFinalPlayerStats = teamOrange.concat(teamBlue);
+    retData.playerStats = realFinalPlayerStats.sort((a, b) => a.isOrange - b.isOrange);
 
     /**
      * get more info about goals
@@ -338,6 +391,14 @@ function updateSheet(data, gameId) {
           // const standingsSheet = doc.sheetsByIndex[0];
           const scheduleSheet = doc.sheetsByTitle["ScheduleRows"]; // doc.sheetsByIndex[1];
           const statsSheet = doc.sheetsByTitle["Stats"]; // doc.sheetsByIndex[6];
+          
+          const gameStatsSheet = doc.sheetsByTitle["GameStats"];
+          const goalStatsSheet = doc.sheetsByTitle["GoalStats"];
+          const { goals, ...gameWithoutGoalsArray } = data.gameStats;
+          
+          const goalRows = goals;
+          const gameRows = [];
+          gameRows.push(gameWithoutGoalsArray);
 
           let scheduleRows = scheduleSheet ? await scheduleSheet.getRows() : [];
           // filter to completed games
@@ -364,7 +425,7 @@ function updateSheet(data, gameId) {
           const allGNs = statsRows.map((row) => row.GN).filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => parseInt(y, 10) - parseInt(x, 10));
           // console.log(allGNs);
 
-          const gameRows = [];
+          const statRows = [];
 
           for (idx in playerStats) {
             const player = playerStats[idx];
@@ -411,6 +472,7 @@ function updateSheet(data, gameId) {
             });
             if (currentGame) {
               CUR_GAMENUM = parseInt(currentGame.GAME, 10);
+              CUR_GAMEWEEK = parseInt(currentGame.GAMEWEEK, 10);
               gameType = currentGame.TYPE;
             } else {
               console.log('GN not found, using ', CUR_GAMENUM);
@@ -440,7 +502,8 @@ function updateSheet(data, gameId) {
             const playerTeam = teamStats.filter((t) => !!t.isOrange === !!isOrange)[0];
             const { timeClumped = 0 } = playerTeam.stats.centerOfMass || {};
             
-            const isSub = !isBot && (teamName !== origTeam);
+            // const isSub = !isBot && (teamName !== origTeam);
+            const isSub = teamName !== origTeam;
             const tmPercent = score / teamTotScore;
             let percentOfTeam = '<0.10';
             if (tmPercent > 0.75) {
@@ -510,9 +573,11 @@ function updateSheet(data, gameId) {
               "TM AVG SCORE": teamTotScore / teamSize,
               "TM%": tmPercent,
               RATING: score / (teamTotScore / teamSize),
-              TYPE: isBot ? 'BOT' : (isSub ? 'SUB' : gameType), // gameType default is RS, could be PO, SN
+              // TYPE: isBot ? 'BOT' : (isSub ? 'SUB' : gameType), // gameType default is RS, could be PO, SN
+              TYPE: (isSub ? 'SUB' : gameType), // gameType default is RS, could be PO, SN
               "Win/Loss": winner ? 'Win' : 'Loss',
               "%Team Score": percentOfTeam,
+              GW: CUR_GAMEWEEK,
               "OPP TOT SCORE": oppTotScore,
               RATIO: teamTotScore / oppTotScore,
               TOUCHES: totalHits,
@@ -562,17 +627,20 @@ function updateSheet(data, gameId) {
 
             // console.log(statRow);
             // console.log(CUR_GAMENUM, '\t', teamScore, teamName, 'vs', oppTeam, oppScore, '\t', (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase());
-            gameRows.push(statRow);
+            statRows.push(statRow);
           }
           try {
-            const addRows = await statsSheet.addRows(gameRows);
-            console.log(`\tGN: ${CUR_GAMENUM}`);
+            const addStats = await statsSheet.addRows(statRows);
+            const addGames = await gameStatsSheet.addRows(gameRows);
+            const addGoals = await goalStatsSheet.addRows(goalRows);
+            console.log(chalk.greenBright(`\tGN: ${CUR_GAMENUM}`));
             if (IS_COMBINE) {
               CUR_GAMENUM += 1;
             } else {
               CUR_GAMENUM = -1;
             }
-            resolve(addRows.length);
+            resolve({ statRows: addStats.length, gameRows: addGames.length, goalRows: addGoals.length });
+
             // resolve(gameRows.length); // TODO: remove after including sheets update
           } catch (err) {
             console.error(chalk.redBright('ERROR adding rows'));

@@ -47,9 +47,9 @@ const delay = (time) => new Promise((res) => setTimeout(res, time));
 
     let numJsonFiles = 0;
 
-    const allGameStats = [];
-    const gamesNoGoals = [];
-    let allGoals = [];
+    // const allGameStats = [];
+    // const gamesNoGoals = [];
+    // let allGoals = [];
 
     for (const file of files) {
       if (file.toLowerCase().endsWith('.json')) { // only JSON files
@@ -60,23 +60,23 @@ const delay = (time) => new Promise((res) => setTimeout(res, time));
           console.log(chalk.cyanBright(`got data, now save it [${file}]`));
           // console.log(JSON.stringify(data, null, 2));
           // console.log(data.playerStats.map((p) => `${p.name}:${p.teamName} [${p.maxTeam}]`));
-          // const numRows = await updateSheet(data);
-          // console.log(`Inserted ${numRows} data rows`);
-          allGameStats.push(data.gameStats);
-          const { goals, ...gameWithoutGoalsArray } = data.gameStats;
-          gamesNoGoals.push(gameWithoutGoalsArray);
-          allGoals = allGoals.concat(data.gameStats.goals);
+          const { gameRows, goalRows } = await updateSheet(data);
+          console.log(`Inserted ${gameRows} game rows, ${goalRows} goal rows`);
+          // allGameStats.push(data.gameStats);
+          // const { goals, ...gameWithoutGoalsArray } = data.gameStats;
+          // gamesNoGoals.push(gameWithoutGoalsArray);
+          // allGoals = allGoals.concat(data.gameStats.goals);
 
           // add a delay
-          // await delay(3000);
+          await delay(3000);
         } catch (err) {
           console.log(chalk.yellow(`JSON [${file}]:`, err));
         }
       }
     }
-    fs.writeFileSync(`${JSON_LOC}/gameStats.json`, JSON.stringify(allGameStats), err => {});
-    fs.writeFileSync(`${JSON_LOC}/goalStats.json`, JSON.stringify(allGoals), err => {});
-    fs.writeFileSync(`${JSON_LOC}/gameStats_noGoals.json`, JSON.stringify(gamesNoGoals), err => {});
+    // fs.writeFileSync(`${JSON_LOC}/gameStats.json`, JSON.stringify(allGameStats), err => {});
+    // fs.writeFileSync(`${JSON_LOC}/goalStats.json`, JSON.stringify(allGoals), err => {});
+    // fs.writeFileSync(`${JSON_LOC}/gameStats_noGoals.json`, JSON.stringify(gamesNoGoals), err => {});
     console.log('Parsed', chalk.yellowBright(numJsonFiles), 'files');
   } catch (e) {
     console.error('Error getting JSON replays!', e);
@@ -317,236 +317,28 @@ function updateSheet(data) {
           // const rostersSheet = doc.sheetsByIndex[5];
           // const standingsSheet = doc.sheetsByIndex[0];
           const scheduleSheet = doc.sheetsByTitle["ScheduleRows"]; // doc.sheetsByIndex[1];
-          const statsSheet = doc.sheetsByTitle["Stats"]; // doc.sheetsByIndex[6];
+          // const statsSheet = doc.sheetsByTitle["Stats"]; // doc.sheetsByIndex[6];
+          const gameStatsSheet = doc.sheetsByTitle["GameStats"];
+          const goalStatsSheet = doc.sheetsByTitle["GoalStats"];
 
           let scheduleRows = await scheduleSheet.getRows();
           // filter to completed games
           scheduleRows = scheduleRows.filter((row) => parseInt(row.GAME_COMPLETE, 10) === 1);
 
-          const statsRows = await statsSheet.getRows();
+          // const statsRows = await statsSheet.getRows();
           // const statsLastGN = statsRows[statsRows.length - 1] ? statsRows[statsRows.length - 1].GN : -1;
           // CUR_GAMENUM = statsLastGN > CUR_GAMENUM ? parseInt(statsLastGN, 10) + 1 : CUR_GAMENUM;
           // add one row per player to the statsSheet
-          const { team0Score, team1Score, teamSize, playerStats, teamStats } = data;
-
-          const winningTeam = team0Score > team1Score ? 0 : 1;
-          const mvp = playerStats.filter((player) => player.isOrange === winningTeam).reduce((prev, cur) => (prev.score > cur.score) ? prev : cur);
-
-          const team0 = playerStats.filter((player) => player.isOrange === 0);
-          const team1 = playerStats.filter((player) => player.isOrange === 1);
-
-          const team0TotScore = team0.map((p) => p.score).reduce((accum, cur) => accum + cur);
-          const team1TotScore = team1.map((p) => p.score).reduce((accum, cur) => accum + cur);
-
-          // get all (unique) GNs that have already been inserted, so we can try to avoid reusing when teams/scorelines match multiple times
-          const allGNs = statsRows.map((row) => row.GN).filter((v, i, a) => a.indexOf(v) === i).sort((x, y) => parseInt(y, 10) - parseInt(x, 10));
-          // console.log(allGNs);
+          // const { team0Score, team1Score, teamSize, playerStats, teamStats } = data;
+          const { goals, ...gameWithoutGoalsArray } = data.gameStats;
 
           const gameRows = [];
-
-          for (idx in playerStats) {
-            const player = playerStats[idx];
-            const {
-              // id, // some places have player by id, but not using those yet
-              name,
-              isBot,
-              isOrange,
-              teamName,
-              origTeam,
-              oppTeam,
-              goals = 0,
-              assists = 0,
-              saves = 0,
-              shots = 0,
-              score = 0,
-              stats,
-              timeInGame = 0,
-            } = player;
-
-            const teamScore = !!isOrange ? team1Score : team0Score;
-            const oppScore = !!!isOrange ? team1Score : team0Score;
-
-            let gameType = 'RS';
-            // finish getting game ID
-            // find game between these teams
-            const currentGame = scheduleRows.find((row) => {
-              // eliminate GNs that are already in the sheet
-              if (allGNs.indexOf(row.GAME) > -1) {
-                return false;
-              }
-
-              const isTeamA = row.TM_A.toUpperCase() === (teamName || '').toUpperCase();
-              const isTeamB = row.TM_B.toUpperCase() === (teamName || '').toUpperCase();
-              const oppTeamB = row.TM_B.toUpperCase() === (oppTeam || '').toUpperCase();
-              const oppTeamA = row.TM_A.toUpperCase() === (oppTeam || '').toUpperCase();
-              
-              if (isTeamA && oppTeamB) {
-                return (parseInt(row.TM_A_SCR, 10) === parseInt(teamScore, 10) && parseInt(row.TM_B_SCR, 10) === parseInt(oppScore, 10));
-              } else if (isTeamB && oppTeamA) {
-                return (parseInt(row.TM_B_SCR, 10) === parseInt(teamScore, 10) && parseInt(row.TM_A_SCR, 10) === parseInt(oppScore, 10));
-              }
-              return false;
-            });
-            if (currentGame) {
-              CUR_GAMENUM = parseInt(currentGame.GAME, 10);
-              gameType = currentGame.TYPE;
-            } else {
-              console.log('GN not found, using -1');
-              console.log(CUR_GAMENUM, '\t', teamScore, teamName, 'vs', oppTeam, oppScore, '\t', (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase());
-            }
-
-            const {
-              boost,
-              distance,
-              possession,
-              positionalTendencies,
-              averages,
-              hitCounts,
-              controller,
-              speed,
-              relativePositioning,
-              // perPossessionStats, // not using; this one isn't always there
-              ballCarries,
-              kickoffStats,
-              demoStats,
-            } = stats;
-            const winner = isOrange === winningTeam ? 1 : 0;
-            const isMvp = mvp.name === name ? 1 : 0;
-            const teamTotScore = !!isOrange ? team1TotScore : team0TotScore;
-            const oppTotScore = !!!isOrange ? team1TotScore : team0TotScore;
-
-            const playerTeam = teamStats.filter((t) => !!t.isOrange === !!isOrange)[0];
-            const { timeClumped = 0 } = playerTeam.stats.centerOfMass || {};
-            
-            const isSub = !isBot && (teamName !== origTeam);
-            const tmPercent = score / teamTotScore;
-            let percentOfTeam = '<0.10';
-            if (tmPercent > 0.75) {
-              percentOfTeam = '>0.75';
-            } else if (tmPercent > 0.50) {
-              percentOfTeam = '>0.50';
-            } else if (tmPercent > 0.33) {
-              percentOfTeam = '>0.33';
-            } else if (tmPercent > 0.25) {
-              percentOfTeam = '>0.25';
-            } else if (tmPercent > 0.10) {
-              percentOfTeam = '>0.10';
-            } else {
-              percentOfTeam = '<0.10';
-            }
-
-            const { boostUsage = 0,
-              numSmallBoosts = 0,
-              numLargeBoosts = 0,
-              wastedUsage = 0,
-              averageBoostLevel = 0,
-              numStolenBoosts = 0,
-            } = boost;
-            const { ballHitForward = 0, ballHitBackward = 0, timeCloseToBall = 0 } = distance;
-            const { turnovers = 0, wonTurnovers = 0 } = possession || {};
-            const {
-              timeLowInAir = 0,
-              timeHighInAir = 0,
-              timeBehindBall = 0,
-              timeInFrontBall = 0,
-              timeOnWall = 0,
-              timeInDefendingThird = 0,
-              timeInNeutralThird = 0,
-              timeInAttackingThird = 0,
-            } = positionalTendencies;
-            const { averageSpeed = 0, averageHitDistance = 0 } = averages;
-            const { totalHits = 0, totalPasses = 0, totalDribbles = 0, totalAerials = 0, totalClears = 0 } = hitCounts || {};
-            const { timeBallcam = 0 } = controller || {};
-            const { timeAtSlowSpeed = 0, timeAtBoostSpeed = 0, timeAtSuperSonic = 0 } = speed;
-            const { timeMostForwardPlayer = 0, timeMostBackPlayer = 0, timeBetweenPlayers = 0 } = relativePositioning;
-            const { totalCarries = 0, totalCarryDistance = 0 } = ballCarries || {};
-            const { numTimeFirstTouch = 0, numTimeAfk = 0 } = kickoffStats;
-            const { numDemosInflicted = 0, numDemosTaken = 0 } = demoStats || {};
-            
-            // CALCULATED STATS
-            const usefulHits = totalPasses + totalClears + shots + goals + saves;
-
-            // each stat row
-            const statRow = {
-              GN: CUR_GAMENUM,
-              PLAYER: (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase(),
-              TM: (teamName || '').toUpperCase(),
-              OPP: (oppTeam || '').toUpperCase(),
-              GP: 1,
-              "TM SC": teamScore,
-              "OPP SC": oppScore,
-              SCORE: score,
-              G: goals,
-              A: assists,
-              SV: saves,
-              SH: shots,
-              MVP: isMvp,
-              PTS: parseInt(goals, 10) + parseInt(assists, 10),
-              W: winner,
-              L: 1 - winner,
-              "TM TOT SC": teamTotScore,
-              "TM AVG SCORE": teamTotScore / teamSize,
-              "TM%": tmPercent,
-              RATING: score / (teamTotScore / teamSize),
-              TYPE: isBot ? 'BOT' : (isSub ? 'SUB' : gameType), // gameType default is RS, could be PO, SN
-              "Win/Loss": winner ? 'Win' : 'Loss',
-              "%Team Score": percentOfTeam,
-              "OPP TOT SCORE": oppTotScore,
-              RATIO: teamTotScore / oppTotScore,
-              TOUCHES: totalHits,
-              "AIR TIME HIGH": timeHighInAir,
-              "AIR TIME LOW": timeLowInAir,
-              "AIR HITS": totalAerials,
-              "DEMOS": numDemosInflicted,
-              "DEMOS TAKEN": numDemosTaken,
-              "FIRST TOUCHES": numTimeFirstTouch,
-              "KICKOFF AFK": numTimeAfk,
-              "CLEARS": totalClears,
-              "PASSES": totalPasses,
-              "TURNOVERS": turnovers,
-              "TURNOVERS WON": wonTurnovers,
-              "BOOST USAGE": boostUsage,
-              "SMALL BOOSTS": numSmallBoosts,
-              "LARGE BOOSTS": numLargeBoosts,
-              "WASTED BOOST": wastedUsage,
-              "AVG BOOST": averageBoostLevel,
-              "STOLEN BOOSTS": numStolenBoosts,
-              "AVG SPEED": averageSpeed,
-              "AVG HIT DISTANCE": averageHitDistance,
-              "SLOW SPEED TIME": timeAtSlowSpeed,
-              "BOOST SPEED TIME": timeAtBoostSpeed,
-              "SUPERSONIC TIME": timeAtSuperSonic,
-              "BALLCAM TIME": timeBallcam,
-              "TIME ON WALL": timeOnWall,
-              "TIME MOST FORWARD": timeMostForwardPlayer,
-              "TIME MOST BACK": timeMostBackPlayer,
-              "TIME BETWEEN": timeBetweenPlayers,
-              "TIME BEHIND BALL": timeBehindBall,
-              "TIME IN FRONT BALL": timeInFrontBall,
-              "BALL HIT FORWARD": ballHitForward,
-              "BALL HIT BACKWARD": ballHitBackward,
-              "TIME CLOSE TO BALL": timeCloseToBall,
-              "BALL CARRIES": totalCarries,
-              "CARRY DISTANCE": totalCarryDistance,
-              "DRIBBLE HITS": totalDribbles,
-              "TIME CLUMPED": timeClumped,
-              "USEFUL HITS": usefulHits,
-              "TIME IN GAME": timeInGame,
-              "TIME DEF THIRD": timeInDefendingThird,
-              "TIME NEUTRAL THIRD": timeInNeutralThird,
-              "TIME ATTACK THIRD": timeInAttackingThird,
-            };
-
-            // console.log(statRow);
-            // console.log(CUR_GAMENUM, '\t', teamScore, teamName, 'vs', oppTeam, oppScore, '\t', (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase());
-            gameRows.push(statRow);
-          }
+          const goalRows = goals;
+          gameRows.push(gameWithoutGoalsArray);
           try {
-            const addRows = await statsSheet.addRows(gameRows);
-            console.log(`\tGN: ${CUR_GAMENUM}`);
-            // CUR_GAMENUM += 1;
-            CUR_GAMENUM = -1;
-            resolve(addRows.length);
+            const addGames = await gameStatsSheet.addRows(gameRows);
+            const addGoals = await goalStatsSheet.addRows(goalRows);
+            resolve({ gameRows: addGames.length, goalRows: addGoals.length });
             // resolve(gameRows.length); // TODO: remove after including sheets update
           } catch (err) {
             console.error(chalk.redBright('ERROR adding rows'));

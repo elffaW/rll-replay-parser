@@ -7,7 +7,9 @@
     "parse-replay": "node ./tools/parseReplayAndUpdateSheet.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "player-info": "node ./tools/getPlayerCameraSettings.js",
-    "game-stats": "node ./tools/getGameStats.js"
+    "game-stats": "node ./tools/getGameStats.js",
+    "hit-stats": "node ./tools/getAllHitsByPlayer.js",
+    "process-hits": "node ./tools/processPlayerHits.js"
   },
   "author": "",
   "license": "ISC",
