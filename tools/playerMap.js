@@ -43,6 +43,9 @@ const PLAYER_TEAM_MAP = {
     "TFeej": "PANDA EX",
     "ades 35": "FAMOUS D",
 
+    // one night sub
+    "phelpsjr8": "PANDA EX",
+
     /*** SEASON 5 ***/
     // "kawa": "TOAST",
     // "AwesomeX": "BRAN",
@@ -189,6 +192,12 @@ const PLAYER_TEAM_MAP = {
     "gerwin": "FAMOUS D",
     "outlaw": "FAMOUS D",
     "foamer": "FAMOUS D",
+    "bandit": "FAMOUS D",
+    "scout": "FAMOUS D",
+    "swabbie": "FAMOUS D",
+    "goose": "FAMOUS D",
+    "yuri": "FAMOUS D",
+    "sultan": "FAMOUS D",
 };
 
 const PLAYER_RLNAME_MAP = {
