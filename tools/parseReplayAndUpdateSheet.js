@@ -85,6 +85,7 @@ const delay = (time) => new Promise((res) => setTimeout(res, time));
           await delay(3000);
         } catch (err) {
           console.log(chalk.yellow(`JSON [${file}]:`, err));
+          console.error(err);
         }
       }
     }
@@ -100,6 +101,8 @@ const delay = (time) => new Promise((res) => setTimeout(res, time));
 function getDataFromReplay(replayFile) {
   return new Promise((resolve, reject) => {
     const replayPath = `../${JSON_LOC}/${replayFile}`;
+
+    const gameName = replayFile.slice(0, -5);
     
     const replayJson = require(replayPath);
 
@@ -296,7 +299,7 @@ function getDataFromReplay(replayFile) {
         probablyOT = true;
       }
       goalWithStats.season = parseInt(SEASON_NUMBER, 10);
-      goalWithStats.gameId = gameId;
+      goalWithStats.gameId = gameName;
       
       return goalWithStats;
     });
@@ -328,7 +331,7 @@ function getDataFromReplay(replayFile) {
 
     retData.gameStats = {
       goals: goalsData,
-      gameId,
+      gameId: gameName,
       avgBallSpeed: ballStats.averages.averageSpeed,
       totalAerials: numAerials,
       neutralPossessionTime,
@@ -395,10 +398,6 @@ function updateSheet(data, gameId) {
           const gameStatsSheet = doc.sheetsByTitle["GameStats"];
           const goalStatsSheet = doc.sheetsByTitle["GoalStats"];
           const { goals, ...gameWithoutGoalsArray } = data.gameStats;
-          
-          const goalRows = goals;
-          const gameRows = [];
-          gameRows.push(gameWithoutGoalsArray);
 
           let scheduleRows = scheduleSheet ? await scheduleSheet.getRows() : [];
           // filter to completed games
@@ -629,6 +628,18 @@ function updateSheet(data, gameId) {
             // console.log(CUR_GAMENUM, '\t', teamScore, teamName, 'vs', oppTeam, oppScore, '\t', (PLAYER_RLNAME_MAP[name.toLowerCase()] || name).toUpperCase());
             statRows.push(statRow);
           }
+          
+          const goalRows = goals.map((g) => {
+            const { ...temp } = g;
+            temp.gameWeek = CUR_GAMEWEEK;
+            temp.gameNum = CUR_GAMENUM;
+            return temp;
+          });
+          const gameRows = [];
+          gameWithoutGoalsArray.gameWeek = CUR_GAMEWEEK;
+          gameWithoutGoalsArray.gameNum = CUR_GAMENUM;
+          gameRows.push(gameWithoutGoalsArray);
+
           try {
             const addStats = await statsSheet.addRows(statRows);
             const addGames = await gameStatsSheet.addRows(gameRows);
